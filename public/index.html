@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Docker Task Manager</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; background: #f3f6fb; color: #182235; }
+    main { max-width: 680px; margin: 55px auto; padding: 28px; background: white; border-radius: 14px; box-shadow: 0 8px 30px #1c355015; }
+    h1 { margin-top: 0; }
+    .sub { color: #65738a; margin-bottom: 24px; }
+    form { display: flex; gap: 10px; }
+    input { flex: 1; min-width: 0; padding: 12px; border: 1px solid #ccd5e2; border-radius: 8px; font-size: 16px; }
+    button { border: 0; border-radius: 8px; padding: 11px 15px; cursor: pointer; background: #245fe5; color: white; font-weight: 600; }
+    ul { list-style: none; padding: 0; margin: 22px 0 0; }
+    li { display: flex; align-items: center; gap: 10px; padding: 13px 0; border-bottom: 1px solid #edf0f5; }
+    li span { flex: 1; overflow-wrap: anywhere; }
+    li.done span { text-decoration: line-through; color: #8a96a8; }
+    button.delete { background: #e9edf4; color: #344054; }
+    #status { min-height: 20px; margin-top: 14px; color: #b42318; font-size: 14px; }
+    .empty { color: #8a96a8; text-align: center; padding: 22px 0; }
+    @media (max-width: 520px) { main { margin: 18px; padding: 20px; } form { flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>My Task Manager</h1>
+    <p class="sub">A tiny Node.js + PostgreSQL app running with Docker.</p>
+    <form id="task-form">
+      <input id="task-title" maxlength="200" placeholder="What do you need to do?" required>
+      <button type="submit">Add task</button>
+    </form>
+    <div id="status" role="status"></div>
+    <ul id="tasks"></ul>
+  </main>
+  <script>
+    const list = document.querySelector("#tasks");
+    const statusBox = document.querySelector("#status");
+
+    async function request(url, options) {
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || `Request failed (${response.status})`);
+      }
+      return response.status === 204 ? null : response.json();
+    }
+
+    async function loadTasks() {
+      try {
+        const tasks = await request("/api/tasks");
+        list.replaceChildren();
+        if (!tasks.length) {
+          const empty = document.createElement("li");
+          empty.className = "empty";
+          empty.textContent = "No tasks yet. Add your first task above.";
+          list.append(empty);
+          return;
+        }
+        for (const task of tasks) {
+          const item = document.createElement("li");
+          if (task.completed) item.classList.add("done");
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = task.completed;
+          checkbox.setAttribute("aria-label", "Mark task complete");
+          checkbox.addEventListener("change", async () => {
+            try {
+              await request(`/api/tasks/${task.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ completed: checkbox.checked })
+              });
+              loadTasks();
+            } catch (error) { statusBox.textContent = error.message; }
+          });
+
+          const title = document.createElement("span");
+          title.textContent = task.title;
+
+          const remove = document.createElement("button");
+          remove.className = "delete";
+          remove.textContent = "Delete";
+          remove.addEventListener("click", async () => {
+            try {
+              await request(`/api/tasks/${task.id}`, { method: "DELETE" });
+              loadTasks();
+            } catch (error) { statusBox.textContent = error.message; }
+          });
+
+          item.append(checkbox, title, remove);
+          list.append(item);
+        }
+        statusBox.textContent = "";
+      } catch (error) { statusBox.textContent = error.message; }
+    }
+
+    document.querySelector("#task-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const input = document.querySelector("#task-title");
+      try {
+        await request("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: input.value })
+        });
+        input.value = "";
+        loadTasks();
+      } catch (error) { statusBox.textContent = error.message; }
+    });
+
+    loadTasks();
+  </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "docker-task-manager",
+  "version": "1.0.0",
+  "description": "A beginner-friendly Node.js, Express and PostgreSQL app for learning Docker",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  }
+}
